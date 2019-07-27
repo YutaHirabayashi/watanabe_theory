@@ -12,6 +12,8 @@ matplotlib = "*"
 pystan = "*"
 seaborn = "*"
 scipy = "*"
+arviz = "*"
+jupyter = "*"
 
 [requires]
 python_version = "3.7"
