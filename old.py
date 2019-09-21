@@ -131,6 +131,7 @@ def calc_generalization_loss(x_data,true_y_func_list,pred_y_func_list):
 
 def scatter_plot(x_data,y_data):
     '''データをプロットする'''
+    fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
     ax.scatter(x_data,y_data, c='red')
 
