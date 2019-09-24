@@ -12,14 +12,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy.random as rd
 import pickle
+import pandas as pd
+import seaborn as sns
 
 from training_mle import calc_mle_opt
 from training_mle import minus_log_likelihood_function
 
-#真の分布からサンプルを生成する
+#分布からサンプルを生成する
 def create_sample(n, w, s):
+    model_dim = w.shape[1] + 1
     x_arr = rd.uniform(0, 20, n)
-    y_mean = [w*np.matrix([[x], [1]]) for x in x_arr]
+    feature_arr = make_feature_matrix(x_arr, model_dim)
+    y_mean = [w*np.matrix(x) for x in feature_arr]
     y = rd.normal(y_mean, s).flatten()
     return x_arr, y
 
@@ -29,7 +33,6 @@ def simple_plot(x_train, y_train, train_w=None, train_s=None, m_dim=None):
     plt.figure()
     plt.plot(x_train, y_train, 'o')
     plt.xlim(0,20)
-    plt.ylim(0,50)
 
     if train_w is not None and train_w is not None:
         x_arr = np.arange(0, 20, 1)
@@ -65,6 +68,11 @@ def calc_g_n(true_w, true_s, model_w, model_s, model_dim):
     g_n = v_sum/N
     return g_n
 
+#AIC
+def calc_aic(t_n, n, m_dim):
+    aic = t_n + m_dim / n
+    return aic
+
 #最尤解探索のための初期値を生成する
 def calc_ini_ges(true_w, true_s, m_dim):
     if m_dim == 3:
@@ -76,11 +84,12 @@ def calc_ini_ges(true_w, true_s, m_dim):
     
     return ini_ges
 
+#最尤法に置ける実験内容
 def mle(n, model_dim):
 
     #真のモデルパラメータの設定
-    w = np.matrix([2.0, 5.0]) #a, b
-    s = 5
+    w = np.matrix([0.005, 0.025, 1.0, 5.0]) #a, b
+    s = 10
 
     #学習用データの生成
     x_train_data, y_train_data = create_sample(n, w, s)
@@ -109,36 +118,66 @@ def mle(n, model_dim):
         model_dim = model_dim
     )
 
-    return [t_n, g_n]
-
     #汎化誤差の推定
+    aic = calc_aic(t_n, n, model_dim)
+    return t_n, g_n, aic
 
+#最尤法の実験を行う
 def mle_exp():
-    sample_num = 15
-    exp_num = 1
-    dict_g_n = {}
-    dict_t_n = {}
-    for model_dim in [3, 5, 7]:
-        res = [mle(sample_num, model_dim) for i in range(exp_num)]
-        t_n_list = [res[i][0] for i in range(len(res))]
-        g_n_list = [res[i][1] for i in range(len(res))]
-        dict_g_n[str(model_dim)] = g_n_list
-        dict_t_n[str(model_dim)] = t_n_list
+    exp_num = 50
+    pd_index = ['sample_num', 'model_dim', 'exp_num', 't_n', 'g_n', 'aic']
+    pd_list = []
+    for sample_num in [20, 80, 120, 240]:
+        for model_dim in [5,3]:
+            for i in range(exp_num):
+                t_n, g_n, aic = mle(sample_num, model_dim)
+                s = pd.Series(
+                    [sample_num, model_dim, i, t_n, g_n, aic],
+                    index = pd_index
+                )
+                pd_list.append(s)
+    df = pd.concat(pd_list, axis=1).T
+    df.to_pickle("mle_res.pkl")
 
-    with open('mle_error.pickle', mode='wb') as f:
-        pickle.dump(dict_g_n, f)
-        pickle.dump(dict_t_n, f)
 
 def main():
     #mle_exp()
-    with open("mle_error.pickle", mode="rb") as f:
-        dict_g_n = pickle.load(f)
-        dict_t_n = pickle.load(f)
-    
+    df = pd.read_pickle("mle_res.pkl")
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.dropna(inplace=True)
 
-    
-    
-    return
+    #汎化誤差とAICの差
+    df["g_n-aic"] = df["g_n"] - df["aic"]
+
+    for y in ["t_n", "g_n", "g_n-aic"]:
+        sns.boxenplot(
+            x='sample_num', 
+            y=y, 
+            data=df[df["sample_num"]!=5], 
+            hue="model_dim"
+        )
+
+        plt.savefig(y + ".png")
+        plt.close()
+
+    #モデル１とモデル２の差分を調べる
+    dif_df = pd.merge(
+        df[df["model_dim"]==3], 
+        df[df["model_dim"]==5],
+        on=["sample_num", "exp_num"])
+
+    dif_df["dif_aic"] = dif_df["aic_x"]-dif_df["aic_y"]
+    dif_df["dif_g_n"] = dif_df["g_n_x"]-dif_df["g_n_y"]
+
+    for y in ["dif_aic", "dif_g_n"]:
+        sns.boxenplot(
+            x='sample_num', 
+            y=y, 
+            data=dif_df[dif_df["sample_num"]!=5]
+        )
+        plt.savefig(y + ".png")
+        plt.close()
+
 
 if __name__ == "__main__":
     main()
