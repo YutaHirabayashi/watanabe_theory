@@ -17,6 +17,7 @@ import seaborn as sns
 
 from training_mle import calc_mle_opt
 from training_mle import minus_log_likelihood_function
+from training_mle import calc_mle_exact
 
 #分布からサンプルを生成する
 def create_sample(n, w, s):
@@ -85,24 +86,19 @@ def calc_ini_ges(true_w, true_s, m_dim):
     return ini_ges
 
 #最尤法に置ける実験内容
-def mle(n, model_dim):
-
-    #真のモデルパラメータの設定
-    w = np.matrix([0.005, 0.025, 1.0, 5.0]) #a, b
-    s = 10
-
-    #学習用データの生成
-    x_train_data, y_train_data = create_sample(n, w, s)
+def mle(model_dim, x_train_data, y_train_data, true_w, true_s):
 
     #学習
     feature_mat = make_feature_matrix(x_train_data, model_dim)
-    ini_ges = calc_ini_ges(w, s, model_dim)
-    train_w, train_s = calc_mle_opt(feature_mat, y_train_data, ini_ges, model_dim)
+    ini_ges = calc_ini_ges(true_w, true_s, model_dim)
+    #train_w, train_s = calc_mle_opt(feature_mat, y_train_data, ini_ges, model_dim)
     
+    train_w, train_s = calc_mle_exact(feature_mat, y_train_data, model_dim)
     #図示
     simple_plot(x_train_data, y_train_data, train_w, train_s, model_dim)
 
     #学習誤差の計算
+    n = x_train_data.shape[0]
     feature_mat = make_feature_matrix(x_train_data, model_dim)
     t_n = 1.0/n*minus_log_likelihood_function(
         train_w.tolist() + [train_s], 
@@ -111,8 +107,8 @@ def mle(n, model_dim):
     
     #汎化誤差の計算
     g_n = calc_g_n(
-        true_w = w,
-        true_s = s,
+        true_w = true_w,
+        true_s = true_s,
         model_w = train_w,
         model_s = train_s,
         model_dim = model_dim
@@ -124,24 +120,31 @@ def mle(n, model_dim):
 
 #最尤法の実験を行う
 def mle_exp():
-    exp_num = 50
+    exp_num = 1000
     pd_index = ['sample_num', 'model_dim', 'exp_num', 't_n', 'g_n', 'aic']
     pd_list = []
-    for sample_num in [20, 80, 120, 240]:
-        for model_dim in [5,3]:
-            for i in range(exp_num):
-                t_n, g_n, aic = mle(sample_num, model_dim)
-                s = pd.Series(
+
+    #真のモデルパラメータの設定
+    w = np.matrix([2.0, 5.0]) #a, b
+    s = 5
+
+    for sample_num in [80, 120, 240]:
+        for i in range(exp_num):
+            #学習用データの生成
+            x_train_data, y_train_data = create_sample(sample_num, w, s)
+            for model_dim in [5,3]:
+                t_n, g_n, aic = mle(model_dim, x_train_data, y_train_data, w, s)
+                ser = pd.Series(
                     [sample_num, model_dim, i, t_n, g_n, aic],
                     index = pd_index
                 )
-                pd_list.append(s)
+                pd_list.append(ser)
     df = pd.concat(pd_list, axis=1).T
     df.to_pickle("mle_res.pkl")
 
 
 def main():
-    #mle_exp()
+    mle_exp()
     df = pd.read_pickle("mle_res.pkl")
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.dropna(inplace=True)
@@ -153,7 +156,7 @@ def main():
         sns.boxenplot(
             x='sample_num', 
             y=y, 
-            data=df[df["sample_num"]!=5], 
+            data=df[(df["sample_num"]!=5) & (df["sample_num"]!=20)], 
             hue="model_dim"
         )
 
@@ -173,11 +176,15 @@ def main():
         sns.boxenplot(
             x='sample_num', 
             y=y, 
-            data=dif_df[dif_df["sample_num"]!=5]
+            data=dif_df[(dif_df["sample_num"]!=5) & (dif_df["sample_num"]!=20)]
         )
         plt.savefig(y + ".png")
         plt.close()
 
+        for n in [80, 120, 240]:
+            sns.distplot(dif_df[dif_df["sample_num"]==n][y], bins=15, kde=False)
+            plt.savefig("dist_"+str(n)+"_"+y+".png")
+            plt.close()
 
 if __name__ == "__main__":
     main()

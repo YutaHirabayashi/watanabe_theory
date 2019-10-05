@@ -1,6 +1,6 @@
 from scipy import optimize
 import numpy as np
-from scipy.special import logsumexp
+from scipy import linalg
 
 def minus_log_likelihood_function(ws, *args):
     x_data = args[0]
@@ -26,7 +26,7 @@ def minus_log_likelihood_function(ws, *args):
 def calc_mle_opt(x_data, y_data, ini_ges, m_dim):
     #解析的に求まるけど無駄に最適化によって求めてみる
     ini_ges = ini_ges
-    res = optimize.fmin(
+    res = optimize.fmin_powell(
         minus_log_likelihood_function,
         ini_ges,
         (x_data, y_data, m_dim),
@@ -36,8 +36,15 @@ def calc_mle_opt(x_data, y_data, ini_ges, m_dim):
 
 def calc_mle_exact(x_data, y_data, m_dim):
     #解析解
+    x_data = x_data.reshape((x_data.shape[0], x_data.shape[1]))
+    y_data = y_data.reshape((-1, 1))
+    A = np.dot(x_data.T, x_data)
+    b = np.dot(x_data.T, y_data)
+    w = linalg.solve(A, b)
 
-    return
+    f = np.dot(x_data, w)
+    s = np.sqrt(np.average(np.power(y_data - f, 2)))
+    return w.flatten(), s
 
 def plot_minus_log_likelihood_function(x_data, y_data):
     return
